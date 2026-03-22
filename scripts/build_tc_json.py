@@ -529,22 +529,26 @@ threats = [
 # A5 (/reset and /stats unauthenticated by design): T04, T18
 # A6 (CI runners ephemeral, actions pinned): T07, T08, T09
 
+# AssumptionLinkSchema: type ('Threat'|'Mitigation'), assumptionId, linkedId — strict, no extra fields
+def al(linked_id, assumption_id, link_type="Threat"):
+    return {"type": link_type, "linkedId": linked_id, "assumptionId": assumption_id}
+
 assumptionLinks = [
-    {"id": "al-a1-t11", "linkedId": T11, "assumptionId": A1},
-    {"id": "al-a1-t12", "linkedId": T12, "assumptionId": A1},
-    {"id": "al-a1-t15", "linkedId": T15, "assumptionId": A1},
-    {"id": "al-a2-t04", "linkedId": T04, "assumptionId": A2},
-    {"id": "al-a2-t18", "linkedId": T18, "assumptionId": A2},
-    {"id": "al-a2-t21", "linkedId": T21, "assumptionId": A2},
-    {"id": "al-a2-t22", "linkedId": T22, "assumptionId": A2},
-    {"id": "al-a3-t16", "linkedId": T16, "assumptionId": A3},
-    {"id": "al-a3-t17", "linkedId": T17, "assumptionId": A3},
-    {"id": "al-a4-t19", "linkedId": T19, "assumptionId": A4},
-    {"id": "al-a5-t04", "linkedId": T04, "assumptionId": A5},
-    {"id": "al-a5-t18", "linkedId": T18, "assumptionId": A5},
-    {"id": "al-a6-t07", "linkedId": T07, "assumptionId": A6},
-    {"id": "al-a6-t08", "linkedId": T08, "assumptionId": A6},
-    {"id": "al-a6-t09", "linkedId": T09, "assumptionId": A6},
+    al(T11, A1),  # A1 loopback → T-10 0.0.0.0 exposure
+    al(T12, A1),  # A1 loopback → T-14 TCP exhaustion
+    al(T15, A1),  # A1 loopback → T-18 UDP reflection
+    al(T04, A2),  # A2 Worker internet-facing → T-03 unauthenticated /reset
+    al(T18, A2),  # A2 Worker internet-facing → T-21 unauthenticated /stats
+    al(T21, A2),  # A2 Worker internet-facing → T-11 XSS
+    al(T22, A2),  # A2 Worker internet-facing → T-12 Worker DoS
+    al(T16, A3),  # A3 SQLite local → T-19 error_msg
+    al(T17, A3),  # A3 SQLite local → T-20 db_path traversal
+    al(T19, A4),  # A4 no secrets in git → T-06 credential leak
+    al(T04, A5),  # A5 /reset unauthenticated by design → T-03
+    al(T18, A5),  # A5 /stats unauthenticated by design → T-21
+    al(T07, A6),  # A6 CI runners ephemeral → T-02 poisoned pipeline
+    al(T08, A6),  # A6 CI runners ephemeral → T-04 mutable Actions tag
+    al(T09, A6),  # A6 CI runners ephemeral → T-08 excessive CI permissions
 ]
 
 # ── mitigationLinks ───────────────────────────────────────────────────────────

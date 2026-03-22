@@ -322,77 +322,77 @@
   ],
   "assumptionLinks": [
     {
-      "id": "al-a1-t11",
+      "type": "Threat",
       "linkedId": "0a5cd4a5-0f60-401e-a0e4-c057e2807589",
       "assumptionId": "f069ba5f-505c-477a-ac6e-9966b45d38ac"
     },
     {
-      "id": "al-a1-t12",
+      "type": "Threat",
       "linkedId": "050c6692-20ea-41fd-8d54-f68e8d9d7820",
       "assumptionId": "f069ba5f-505c-477a-ac6e-9966b45d38ac"
     },
     {
-      "id": "al-a1-t15",
+      "type": "Threat",
       "linkedId": "fa551525-5932-4d76-9afe-27575b1760c2",
       "assumptionId": "f069ba5f-505c-477a-ac6e-9966b45d38ac"
     },
     {
-      "id": "al-a2-t04",
+      "type": "Threat",
       "linkedId": "a6bdd8bf-838b-4d48-b86a-603a8daa0f8b",
       "assumptionId": "43c54cd3-6c2a-4dec-9e39-484f2c6c06c8"
     },
     {
-      "id": "al-a2-t18",
+      "type": "Threat",
       "linkedId": "f0cb25d1-c98b-4ff4-b4f8-c48c07b18b2d",
       "assumptionId": "43c54cd3-6c2a-4dec-9e39-484f2c6c06c8"
     },
     {
-      "id": "al-a2-t21",
+      "type": "Threat",
       "linkedId": "ee12e801-d0ca-43b1-8434-6a1f992a3728",
       "assumptionId": "43c54cd3-6c2a-4dec-9e39-484f2c6c06c8"
     },
     {
-      "id": "al-a2-t22",
+      "type": "Threat",
       "linkedId": "5181e9b3-b05f-4689-adf6-3e9c4803258d",
       "assumptionId": "43c54cd3-6c2a-4dec-9e39-484f2c6c06c8"
     },
     {
-      "id": "al-a3-t16",
+      "type": "Threat",
       "linkedId": "aa97ee68-d4e9-4a88-b67d-e61c20978d91",
       "assumptionId": "f47ea747-a2a2-4bf9-8335-5cb3abf0b3da"
     },
     {
-      "id": "al-a3-t17",
+      "type": "Threat",
       "linkedId": "59b86efe-4db2-4c9c-b69c-99074f644de3",
       "assumptionId": "f47ea747-a2a2-4bf9-8335-5cb3abf0b3da"
     },
     {
-      "id": "al-a4-t19",
+      "type": "Threat",
       "linkedId": "cd632493-6169-4c47-8159-3d6b884d0f9b",
       "assumptionId": "2458585c-8d5c-41d4-b1c0-160e7d8d55af"
     },
     {
-      "id": "al-a5-t04",
+      "type": "Threat",
       "linkedId": "a6bdd8bf-838b-4d48-b86a-603a8daa0f8b",
       "assumptionId": "a0883d44-2638-4f87-a5a5-d412c8f9b80c"
     },
     {
-      "id": "al-a5-t18",
+      "type": "Threat",
       "linkedId": "f0cb25d1-c98b-4ff4-b4f8-c48c07b18b2d",
       "assumptionId": "a0883d44-2638-4f87-a5a5-d412c8f9b80c"
     },
     {
-      "id": "al-a6-t07",
+      "type": "Threat",
       "linkedId": "275751b2-f3ce-445c-86e6-b244152c0fa4",
       "assumptionId": "df4bb2f8-331a-42e5-9a17-5c3bee82bd6d"
     },
     {
-      "id": "al-a6-t08",
+      "type": "Threat",
       "linkedId": "1a85a617-68f7-4aaa-bb71-85c3e0411e42",
       "assumptionId": "df4bb2f8-331a-42e5-9a17-5c3bee82bd6d"
     },
     {
-      "id": "al-a6-t09",
+      "type": "Threat",
       "linkedId": "d6d30c8d-308d-4e57-9ed5-bac2cffb319d",
       "assumptionId": "df4bb2f8-331a-42e5-9a17-5c3bee82bd6d"
     }
