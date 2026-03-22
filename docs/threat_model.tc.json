@@ -1,0 +1,500 @@
+{
+  "schema": 1,
+  "applicationInfo": {
+    "name": "Greeting — CLI + Cloudflare Worker",
+    "description": "A time-aware colourised terminal greeting CLI with RFC 865 Quote of the Day service, async SQLite telemetry, and a Cloudflare Worker HTTP API backed by D1. Live demo: https://greeting-worker.cancun.workers.dev/"
+  },
+  "architecture": {
+    "description": "## Components\n\n- **src/greeting.py** — Greeting class: reads system clock, classifies hour via TimeOfDay enum, prints colourised greeting + optional quote to stdout.\n- **src/time_of_day.py** — TimeOfDay enum: period classification (Morning/Afternoon/Evening/Night), colorama colours, salutations.\n- **src/quote_provider.py** — QuoteProvider: 120-quote RFC 865 corpus, shuffle-deck selection, optional seeding.\n- **src/quote_service.py** — QuoteService: RFC 865 TCP + UDP server (configurable port, default 127.0.0.1).\n- **src/telemetry.py** — TelemetryStore: async SQLite writer (background queue thread), nanosecond precision (duration_ns INTEGER).\n- **src/stats.py** — StatsReporter: min/max/mean/median/p95/p99 from telemetry DB.\n- **worker/src/entry.py** — Cloudflare Worker HTTP API (GET /, /quote, /stats; POST /reset).\n- **worker/src/cf_telemetry.py** — D1-backed telemetry adapter (JsProxy row handling).\n- **.github/workflows/ci.yml** — GitHub Actions CI: multi-Python matrix, pip-audit CVE scan, Sphinx docs build."
+  },
+  "dataflow": {
+    "description": "## Data Flows\n\n1. **CLI path**: __main__ -> Greeting.__init__(name) -> Greeting.build(now) -> TimeOfDay.from_hour() -> QuoteProvider.get() -> stdout. Telemetry recorded async to SQLite via background queue.\n2. **TCP/UDP path**: Network client -> QuoteService._handle_tcp() / UDP loop -> QuoteProvider.get() -> socket response bytes.\n3. **Worker HTTP path**: Browser -> Cloudflare edge -> Default.fetch() -> _build_greeting() -> QuoteProvider.get() + CfTelemetry.record() -> D1 database -> HTML/JSON response.\n4. **Stats path**: GET /stats -> CfTelemetry.historic_summary() -> D1 SELECT -> _rows_to_python() -> JSON response.\n5. **CI/CD path**: git push -> GitHub Actions -> pip install -> unittest -> pip-audit -> sphinx-build."
+  },
+  "assumptions": [
+    {
+      "id": "f069ba5f-505c-477a-ac6e-9966b45d38ac", "numericId": 1, "displayOrder": 1,
+      "content": "The CLI runs on a trusted developer workstation; the OS clock is not adversarially controlled.",
+      "tags": ["CLI", "Trust Boundary"], "metadata": []
+    },
+    {
+      "id": "43c54cd3-6c2a-4dec-9e39-484f2c6c06c8", "numericId": 2, "displayOrder": 2,
+      "content": "QuoteService is bound to 127.0.0.1 by default and is not exposed to public networks unless explicitly configured.",
+      "tags": ["Network", "QuoteService"], "metadata": []
+    },
+    {
+      "id": "f47ea747-a2a2-4bf9-8335-5cb3abf0b3da", "numericId": 3, "displayOrder": 3,
+      "content": "The SQLite telemetry database resides on a local filesystem accessible only to the running user.",
+      "tags": ["SQLite", "Telemetry"], "metadata": []
+    },
+    {
+      "id": "2458585c-8d5c-41d4-b1c0-160e7d8d55af", "numericId": 4, "displayOrder": 4,
+      "content": "The Cloudflare Worker runs in an isolated V8 isolate; D1 access is mediated by the Cloudflare platform.",
+      "tags": ["Cloudflare", "Worker", "D1"], "metadata": []
+    },
+    {
+      "id": "a0883d44-2638-4f87-a5a5-d412c8f9b80c", "numericId": 5, "displayOrder": 5,
+      "content": "No secrets (API tokens, database IDs) are committed to the repository; wrangler.local.toml is gitignored.",
+      "tags": ["Secrets", "Git"], "metadata": []
+    },
+    {
+      "id": "df4bb2f8-331a-42e5-9a17-5c3bee82bd6d", "numericId": 6, "displayOrder": 6,
+      "content": "GitHub Actions runners are ephemeral and isolated; repository secrets are managed via GitHub Secrets.",
+      "tags": ["CI/CD", "GitHub Actions"], "metadata": []
+    }
+  ],
+  "mitigations": [
+    {
+      "id": "d02ae732-dc06-4c14-98b9-72b366480435", "numericId": 1, "displayOrder": 1,
+      "content": "Strip ANSI escape sequences and non-printable characters from name input; enforce 100-character max length at Greeting construction time.",
+      "tags": ["Input Validation", "T-01", "T-03"], "metadata": []
+    },
+    {
+      "id": "d6de56e7-311b-4575-9458-b7367a7bf311", "numericId": 2, "displayOrder": 2,
+      "content": "Validate hour is an integer in range 0-23 inside TimeOfDay.from_hour(); raise ValueError on out-of-range input.",
+      "tags": ["Input Validation", "T-02"], "metadata": []
+    },
+    {
+      "id": "447d5188-d3a3-4db0-9e63-5faccdc65ac5", "numericId": 3, "displayOrder": 3,
+      "content": "Pin all PyPI dependencies with SHA-256 hashes using pip-compile --generate-hashes; use --require-hashes in CI.",
+      "tags": ["Supply Chain", "T-05", "T-10"], "metadata": []
+    },
+    {
+      "id": "da5c66b2-a4ac-4480-969a-b543385572b7", "numericId": 4, "displayOrder": 4,
+      "content": "Run pip-audit on every CI build with --disable-pip --no-deps to scan for known CVEs in dependencies.",
+      "tags": ["Supply Chain", "CVE", "T-05", "T-06"], "metadata": []
+    },
+    {
+      "id": "66c5bef0-868a-41be-90ad-c4106f0fb4c7", "numericId": 5, "displayOrder": 5,
+      "content": "Pin all GitHub Actions to full commit SHAs instead of mutable version tags to prevent tag-hijacking supply chain attacks.",
+      "tags": ["CI/CD", "Supply Chain", "T-08"], "metadata": []
+    },
+    {
+      "id": "40737722-0bc7-45b0-a619-01d055a906ef", "numericId": 6, "displayOrder": 6,
+      "content": "Declare minimal permissions (contents: read) at workflow and job level in ci.yml; never grant write unless required.",
+      "tags": ["CI/CD", "Least Privilege", "T-09"], "metadata": []
+    },
+    {
+      "id": "d324acde-a6bc-4871-a0d1-974c284810cb", "numericId": 7, "displayOrder": 7,
+      "content": "Require PR approval before CI runs on first-time fork contributors; never echo secrets in workflow steps.",
+      "tags": ["CI/CD", "T-07", "T-11"], "metadata": []
+    },
+    {
+      "id": "a875f12e-f88f-495d-bd17-a5575fbbf462", "numericId": 8, "displayOrder": 8,
+      "content": "Require signed commits and enforce via branch protection; enable Dependabot security alerts and version updates.",
+      "tags": ["Repository", "T-12"], "metadata": []
+    },
+    {
+      "id": "ed84e30a-1408-48a8-b1fb-bb250ea649d5", "numericId": 9, "displayOrder": 9,
+      "content": "Use PyPI Trusted Publishers (OIDC) for publishing; sign release artifacts with sigstore; enable 2FA on PyPI account.",
+      "tags": ["Release", "T-13"], "metadata": []
+    },
+    {
+      "id": "f59bfc3f-d8a0-4c14-bb1d-3e98859ce2a5", "numericId": 10, "displayOrder": 10,
+      "content": "QuoteProvider validates quote length <= 512 chars at construction; apply same ANSI-stripping logic for custom corpora.",
+      "tags": ["Input Validation", "T-14", "T-15"], "metadata": []
+    },
+    {
+      "id": "3d57cbab-0a1b-4bd2-b2d2-3bc15e2e0cd7", "numericId": 11, "displayOrder": 11,
+      "content": "Implement a bounded thread pool (ThreadPoolExecutor) with max_workers cap and per-IP connection rate limiting for QuoteService.",
+      "tags": ["DoS", "Network", "T-16"], "metadata": []
+    },
+    {
+      "id": "d1d2d435-d978-4988-8f01-de78ad807682", "numericId": 12, "displayOrder": 12,
+      "content": "Catch all socket errors in QuoteService handlers; log at WARNING level server-side only; never send stack traces to clients.",
+      "tags": ["Information Disclosure", "T-17"], "metadata": []
+    },
+    {
+      "id": "29a96004-ab51-40b7-94da-72ea870acda3", "numericId": 13, "displayOrder": 13,
+      "content": "Default QuoteService host to 127.0.0.1 (loopback); document that 0.0.0.0 must only be used in trusted network environments.",
+      "tags": ["Network", "T-18", "T-20"], "metadata": []
+    },
+    {
+      "id": "e140177a-ce32-4bb5-9709-52e09a25fbb5", "numericId": 14, "displayOrder": 14,
+      "content": "Use CAP_NET_BIND_SERVICE or authbind/systemd socket activation instead of running as root to bind port 17.",
+      "tags": ["Privilege", "T-19"], "metadata": []
+    },
+    {
+      "id": "3cdf5c0c-17d6-4832-99ba-33f9066a90ba", "numericId": 15, "displayOrder": 15,
+      "content": "Truncate error_msg to 500 characters before writing to SQLite; set DB file permissions to 600 (owner read/write only).",
+      "tags": ["SQLite", "Telemetry", "T-21"], "metadata": []
+    },
+    {
+      "id": "2268844b-b35d-4716-834b-e42d85903b17", "numericId": 16, "displayOrder": 16,
+      "content": "Wrap db_path in pathlib.Path() at TelemetryStore construction to normalise traversal sequences; validate path is within expected directory if exposed to untrusted config.",
+      "tags": ["SQLite", "Path Traversal", "T-22"], "metadata": []
+    },
+    {
+      "id": "6b5a7958-2f16-44d7-be62-880a65b0f0b0", "numericId": 17, "displayOrder": 17,
+      "content": "Store all Cloudflare credentials (API token, database_id) in gitignored wrangler.local.toml and environment variables only; never commit to repository.",
+      "tags": ["Secrets", "Cloudflare", "T-11"], "metadata": []
+    },
+    {
+      "id": "8aac83f6-5242-4beb-8fef-657c0bf901c7", "numericId": 18, "displayOrder": 18,
+      "content": "Sanitise name input in Worker entry.py using the same two-pass ANSI + non-printable strip as the CLI; enforce 100-char max.",
+      "tags": ["Input Validation", "Worker", "T-01"], "metadata": []
+    }
+  ],
+  "assumptionLinks": [],
+  "mitigationLinks": [
+    { "linkedId": "640f6502-da6f-49d2-82a4-f85b3632a265", "mitigationId": "d02ae732-dc06-4c14-98b9-72b366480435" },
+    { "linkedId": "640f6502-da6f-49d2-82a4-f85b3632a265", "mitigationId": "8aac83f6-5242-4beb-8fef-657c0bf901c7" },
+    { "linkedId": "0ee7dc62-cfbf-4a99-ab41-01086788c75e", "mitigationId": "d6de56e7-311b-4575-9458-b7367a7bf311" },
+    { "linkedId": "4e815c23-6b2b-4569-9040-b1439cb66f32", "mitigationId": "d02ae732-dc06-4c14-98b9-72b366480435" },
+    { "linkedId": "a6bdd8bf-838b-4d48-b86a-603a8daa0f8b", "mitigationId": "447d5188-d3a3-4db0-9e63-5faccdc65ac5" },
+    { "linkedId": "a6bdd8bf-838b-4d48-b86a-603a8daa0f8b", "mitigationId": "da5c66b2-a4ac-4480-969a-b543385572b7" },
+    { "linkedId": "c3ea3d79-994e-4e88-9910-ede209e77da8", "mitigationId": "da5c66b2-a4ac-4480-969a-b543385572b7" },
+    { "linkedId": "900c20a5-db67-4b72-8210-bcc872ed8596", "mitigationId": "d324acde-a6bc-4871-a0d1-974c284810cb" },
+    { "linkedId": "275751b2-f3ce-445c-86e6-b244152c0fa4", "mitigationId": "66c5bef0-868a-41be-90ad-c4106f0fb4c7" },
+    { "linkedId": "1a85a617-68f7-4aaa-bb71-85c3e0411e42", "mitigationId": "40737722-0bc7-45b0-a619-01d055a906ef" },
+    { "linkedId": "d6d30c8d-308d-4e57-9ed5-bac2cffb319d", "mitigationId": "447d5188-d3a3-4db0-9e63-5faccdc65ac5" },
+    { "linkedId": "1932fe98-fe93-4ec2-a84b-79847abed77a", "mitigationId": "d324acde-a6bc-4871-a0d1-974c284810cb" },
+    { "linkedId": "1932fe98-fe93-4ec2-a84b-79847abed77a", "mitigationId": "6b5a7958-2f16-44d7-be62-880a65b0f0b0" },
+    { "linkedId": "0a5cd4a5-0f60-401e-a0e4-c057e2807589", "mitigationId": "a875f12e-f88f-495d-bd17-a5575fbbf462" },
+    { "linkedId": "ee12e801-d0ca-43b1-8434-6a1f992a3728", "mitigationId": "ed84e30a-1408-48a8-b1fb-bb250ea649d5" },
+    { "linkedId": "5181e9b3-b05f-4689-adf6-3e9c4803258d", "mitigationId": "f59bfc3f-d8a0-4c14-bb1d-3e98859ce2a5" },
+    { "linkedId": "3862f3a4-3c8d-4e0b-9ddb-a6b50b00dd08", "mitigationId": "f59bfc3f-d8a0-4c14-bb1d-3e98859ce2a5" },
+    { "linkedId": "2ebb8e69-2a94-48fd-a0ff-772765ff6362", "mitigationId": "3d57cbab-0a1b-4bd2-b2d2-3bc15e2e0cd7" },
+    { "linkedId": "050c6692-20ea-41fd-8d54-f68e8d9d7820", "mitigationId": "d1d2d435-d978-4988-8f01-de78ad807682" },
+    { "linkedId": "c2af25a7-8cb4-4bcb-8122-14de77344436", "mitigationId": "29a96004-ab51-40b7-94da-72ea870acda3" },
+    { "linkedId": "91bbff65-afc7-43cc-ad9c-40230223b775", "mitigationId": "e140177a-ce32-4bb5-9709-52e09a25fbb5" },
+    { "linkedId": "fa551525-5932-4d76-9afe-27575b1760c2", "mitigationId": "29a96004-ab51-40b7-94da-72ea870acda3" },
+    { "linkedId": "aa97ee68-d4e9-4a88-b67d-e61c20978d91", "mitigationId": "3cdf5c0c-17d6-4832-99ba-33f9066a90ba" },
+    { "linkedId": "59b86efe-4db2-4c9c-b69c-99074f644de3", "mitigationId": "2268844b-b35d-4716-834b-e42d85903b17" }
+  ],
+  "threats": [
+    {
+      "id": "640f6502-da6f-49d2-82a4-f85b3632a265", "numericId": 1, "displayOrder": 1,
+      "statement": "An external caller with access to the Greeting API, passing unsanitised input, can inject ANSI escape sequences or control characters into the name parameter, which leads to terminal manipulation or display corruption, negatively impacting the integrity of terminal output.",
+      "threatSource": "external caller with access to the Greeting API",
+      "prerequisites": "passing unsanitised input",
+      "threatAction": "inject ANSI escape sequences or control characters into the name parameter",
+      "threatImpact": "terminal manipulation or display corruption",
+      "impactedAssets": ["terminal stdout", "Greeting output"],
+      "tags": ["STRIDE-Tampering", "T-01", "CLI", "Input-Validation"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Tampering, Information Disclosure" },
+        { "key": "custom:Risk", "value": "Low-Medium" },
+        { "key": "custom:EntryPoint", "value": "EP-1: name parameter" }
+      ]
+    },
+    {
+      "id": "0ee7dc62-cfbf-4a99-ab41-01086788c75e", "numericId": 2, "displayOrder": 2,
+      "statement": "A developer or test harness with the ability to call Greeting.build(), passing a crafted datetime object, can supply an out-of-range hour value, which leads to incorrect period classification, negatively impacting greeting correctness.",
+      "threatSource": "developer or test harness",
+      "prerequisites": "with the ability to call Greeting.build()",
+      "threatAction": "supply an out-of-range hour value via a crafted datetime object",
+      "threatImpact": "incorrect period classification",
+      "impactedAssets": ["TimeOfDay period logic", "greeting output"],
+      "tags": ["STRIDE-Tampering", "T-02", "CLI"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Tampering" },
+        { "key": "custom:Risk", "value": "Low" },
+        { "key": "custom:EntryPoint", "value": "EP-2: now parameter" }
+      ]
+    },
+    {
+      "id": "4e815c23-6b2b-4569-9040-b1439cb66f32", "numericId": 3, "displayOrder": 3,
+      "statement": "An external caller with access to the Greeting API, passing an unbounded string, can supply a multi-megabyte name value, which leads to excessive memory allocation during f-string construction, negatively impacting process stability.",
+      "threatSource": "external caller with access to the Greeting API",
+      "prerequisites": "passing an unbounded string",
+      "threatAction": "supply a multi-megabyte name value",
+      "threatImpact": "excessive memory allocation during f-string construction",
+      "impactedAssets": ["process memory", "stdout"],
+      "tags": ["STRIDE-DoS", "T-03", "CLI"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Denial of Service" },
+        { "key": "custom:Risk", "value": "Low" },
+        { "key": "custom:EntryPoint", "value": "EP-1: name parameter" }
+      ]
+    },
+    {
+      "id": "a6bdd8bf-838b-4d48-b86a-603a8daa0f8b", "numericId": 4, "displayOrder": 4,
+      "statement": "A local attacker with OS-level access, manipulating the system clock, can cause datetime.now() to return a falsified time, which leads to an incorrect time-of-day greeting and colour, negatively impacting output accuracy.",
+      "threatSource": "local attacker with OS-level access",
+      "prerequisites": "manipulating the system clock",
+      "threatAction": "cause datetime.now() to return a falsified time",
+      "threatImpact": "incorrect time-of-day greeting and colour",
+      "impactedAssets": ["system clock", "greeting output"],
+      "tags": ["STRIDE-Spoofing", "T-04", "CLI"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Spoofing, Tampering" },
+        { "key": "custom:Risk", "value": "Low" },
+        { "key": "custom:EntryPoint", "value": "EP-3: system clock" }
+      ]
+    },
+    {
+      "id": "c3ea3d79-994e-4e88-9910-ede209e77da8", "numericId": 5, "displayOrder": 5,
+      "statement": "A supply chain attacker with control over a PyPI package release, compromising the colorama package, can execute arbitrary code at import time in the developer or CI environment, which leads to full environment compromise, negatively impacting source code integrity and CI pipeline security.",
+      "threatSource": "supply chain attacker with control over a PyPI package release",
+      "prerequisites": "compromising the colorama package",
+      "threatAction": "execute arbitrary code at import time in the developer or CI environment",
+      "threatImpact": "full environment compromise",
+      "impactedAssets": ["developer workstation", "CI/CD pipeline", "source code"],
+      "tags": ["STRIDE-Tampering", "T-05", "Supply-Chain", "Critical"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Tampering, Elevation of Privilege" },
+        { "key": "custom:Risk", "value": "Critical 6/9" },
+        { "key": "custom:EntryPoint", "value": "EP-4: PyPI dependency resolution" }
+      ]
+    },
+    {
+      "id": "900c20a5-db67-4b72-8210-bcc872ed8596", "numericId": 6, "displayOrder": 6,
+      "statement": "A malicious package author with a typosquatted package name on PyPI, exploiting developer typing errors, can cause installation of a malicious package instead of colorama, which leads to arbitrary code execution, negatively impacting the developer workstation and CI environment.",
+      "threatSource": "malicious package author with a typosquatted package name on PyPI",
+      "prerequisites": "exploiting developer typing errors",
+      "threatAction": "cause installation of a malicious package instead of colorama",
+      "threatImpact": "arbitrary code execution",
+      "impactedAssets": ["developer workstation", "CI/CD pipeline"],
+      "tags": ["STRIDE-Tampering", "T-06", "Supply-Chain"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Tampering" },
+        { "key": "custom:Risk", "value": "Medium 3/9" },
+        { "key": "custom:EntryPoint", "value": "EP-4: PyPI dependency resolution" }
+      ]
+    },
+    {
+      "id": "275751b2-f3ce-445c-86e6-b244152c0fa4", "numericId": 7, "displayOrder": 7,
+      "statement": "A malicious contributor with the ability to submit a pull request, injecting commands into workflow steps, can execute arbitrary code on the GitHub Actions runner, which leads to CI runner compromise and secret exfiltration, negatively impacting the CI/CD pipeline and repository integrity.",
+      "threatSource": "malicious contributor with the ability to submit a pull request",
+      "prerequisites": "injecting commands into workflow steps",
+      "threatAction": "execute arbitrary code on the GitHub Actions runner",
+      "threatImpact": "CI runner compromise and secret exfiltration",
+      "impactedAssets": ["CI/CD pipeline", "GitHub repository secrets", "source code"],
+      "tags": ["STRIDE-Tampering", "T-07", "CI-CD", "Critical", "OWASP-CICD-SEC-1"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Tampering, Elevation of Privilege" },
+        { "key": "custom:Risk", "value": "Critical 6/9" },
+        { "key": "custom:OWASP", "value": "CICD-SEC-1: Poisoned Pipeline Execution" },
+        { "key": "custom:EntryPoint", "value": "EP-5: GitHub Actions workflow triggers" }
+      ]
+    },
+    {
+      "id": "1a85a617-68f7-4aaa-bb71-85c3e0411e42", "numericId": 8, "displayOrder": 8,
+      "statement": "A compromised GitHub Actions maintainer with control over a mutable version tag, pushing malicious code to an existing tag, can silently replace a trusted action used in ci.yml, which leads to arbitrary code execution on the CI runner, negatively impacting pipeline integrity.",
+      "threatSource": "compromised GitHub Actions maintainer with control over a mutable version tag",
+      "prerequisites": "pushing malicious code to an existing tag",
+      "threatAction": "silently replace a trusted action used in ci.yml",
+      "threatImpact": "arbitrary code execution on the CI runner",
+      "impactedAssets": ["CI/CD pipeline", "GitHub Actions runner"],
+      "tags": ["STRIDE-Tampering", "T-08", "CI-CD", "Supply-Chain", "Critical", "OWASP-CICD-SEC-3"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Tampering" },
+        { "key": "custom:Risk", "value": "Critical 6/9" },
+        { "key": "custom:OWASP", "value": "CICD-SEC-3: Dependency Chain Abuse" },
+        { "key": "custom:EntryPoint", "value": "EP-6: Third-party GitHub Actions" }
+      ]
+    },
+    {
+      "id": "d6d30c8d-308d-4e57-9ed5-bac2cffb319d", "numericId": 9, "displayOrder": 9,
+      "statement": "A workflow with excessive default permissions, triggered by a push or pull_request event, can write to repository contents without explicit authorisation, which leads to unintended repository modifications, negatively impacting source code integrity.",
+      "threatSource": "workflow with excessive default permissions",
+      "prerequisites": "triggered by a push or pull_request event",
+      "threatAction": "write to repository contents without explicit authorisation",
+      "threatImpact": "unintended repository modifications",
+      "impactedAssets": ["GitHub repository", "source code"],
+      "tags": ["STRIDE-ElevationOfPrivilege", "T-09", "CI-CD", "OWASP-CICD-SEC-4"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Elevation of Privilege" },
+        { "key": "custom:Risk", "value": "High 4/9" },
+        { "key": "custom:OWASP", "value": "CICD-SEC-4: Insufficient Pipeline Permissions" },
+        { "key": "custom:EntryPoint", "value": "EP-5: GitHub Actions workflow triggers" }
+      ]
+    },
+    {
+      "id": "1932fe98-fe93-4ec2-a84b-79847abed77a", "numericId": 10, "displayOrder": 10,
+      "statement": "A dependency confusion attacker with a malicious package on a public registry, exploiting pip resolution order, can substitute a private package name with a malicious public one during CI install, which leads to arbitrary code execution in the CI environment, negatively impacting pipeline and build integrity.",
+      "threatSource": "dependency confusion attacker with a malicious package on a public registry",
+      "prerequisites": "exploiting pip resolution order",
+      "threatAction": "substitute a private package name with a malicious public one during CI install",
+      "threatImpact": "arbitrary code execution in the CI environment",
+      "impactedAssets": ["CI/CD pipeline", "build artifacts"],
+      "tags": ["STRIDE-Tampering", "T-10", "CI-CD", "Supply-Chain", "OWASP-CICD-SEC-8"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Tampering" },
+        { "key": "custom:Risk", "value": "High 3/9" },
+        { "key": "custom:OWASP", "value": "CICD-SEC-8: Ungoverned Usage of 3rd Party Services" },
+        { "key": "custom:EntryPoint", "value": "EP-4, EP-6" }
+      ]
+    },
+    {
+      "id": "0a5cd4a5-0f60-401e-a0e4-c057e2807589", "numericId": 11, "displayOrder": 11,
+      "statement": "A misconfigured workflow step with access to environment variables, echoing secrets in a run block, can expose tokens or credentials in public CI logs, which leads to secret exfiltration, negatively impacting Cloudflare API token and repository secret confidentiality.",
+      "threatSource": "misconfigured workflow step with access to environment variables",
+      "prerequisites": "echoing secrets in a run block",
+      "threatAction": "expose tokens or credentials in public CI logs",
+      "threatImpact": "secret exfiltration",
+      "impactedAssets": ["GitHub repository secrets", "Cloudflare API token"],
+      "tags": ["STRIDE-InformationDisclosure", "T-11", "CI-CD", "Secrets"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Information Disclosure" },
+        { "key": "custom:Risk", "value": "High 3/9" },
+        { "key": "custom:EntryPoint", "value": "EP-5: GitHub Actions workflow triggers" }
+      ]
+    },
+    {
+      "id": "ee12e801-d0ca-43b1-8434-6a1f992a3728", "numericId": 12, "displayOrder": 12,
+      "statement": "A compromised contributor with commit access, silently modifying requirements.txt or setup.py, can add a malicious dependency without triggering an automated review, which leads to undetected supply chain compromise, negatively impacting downstream consumers and the CI pipeline.",
+      "threatSource": "compromised contributor with commit access",
+      "prerequisites": "silently modifying requirements.txt or setup.py",
+      "threatAction": "add a malicious dependency without triggering an automated review",
+      "threatImpact": "undetected supply chain compromise",
+      "impactedAssets": ["requirements.txt", "setup.py", "CI/CD pipeline"],
+      "tags": ["STRIDE-Repudiation", "T-12", "Repository", "Supply-Chain"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Repudiation" },
+        { "key": "custom:Risk", "value": "High 3/9" },
+        { "key": "custom:EntryPoint", "value": "EP-4: dependency resolution" }
+      ]
+    },
+    {
+      "id": "5181e9b3-b05f-4689-adf6-3e9c4803258d", "numericId": 13, "displayOrder": 13,
+      "statement": "An attacker with compromised PyPI account credentials, publishing a malicious release without a signature, can distribute tampered package artifacts to downstream consumers, which leads to arbitrary code execution for anyone installing the package, negatively impacting package consumers.",
+      "threatSource": "attacker with compromised PyPI account credentials",
+      "prerequisites": "publishing a malicious release without a signature",
+      "threatAction": "distribute tampered package artifacts to downstream consumers",
+      "threatImpact": "arbitrary code execution for anyone installing the package",
+      "impactedAssets": ["PyPI release", "downstream consumers"],
+      "tags": ["STRIDE-Tampering", "T-13", "Release", "Supply-Chain"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Tampering" },
+        { "key": "custom:Risk", "value": "High 3/9" },
+        { "key": "custom:EntryPoint", "value": "Source distribution" }
+      ]
+    },
+    {
+      "id": "3862f3a4-3c8d-4e0b-9ddb-a6b50b00dd08", "numericId": 14, "displayOrder": 14,
+      "statement": "A caller with the ability to supply a custom quotes tuple to QuoteProvider, injecting ANSI escape sequences, can cause terminal manipulation on the receiving TCP/UDP client, which leads to corrupted terminal state, negatively impacting QuoteService clients.",
+      "threatSource": "caller with the ability to supply a custom quotes tuple to QuoteProvider",
+      "prerequisites": "injecting ANSI escape sequences",
+      "threatAction": "cause terminal manipulation on the receiving TCP/UDP client",
+      "threatImpact": "corrupted terminal state",
+      "impactedAssets": ["QuoteService TCP/UDP clients", "terminal output"],
+      "tags": ["STRIDE-Tampering", "T-14", "QuoteProvider"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Tampering, Information Disclosure" },
+        { "key": "custom:Risk", "value": "Low-Medium 2/9" },
+        { "key": "custom:EntryPoint", "value": "EP-10: quotes parameter" }
+      ]
+    },
+    {
+      "id": "2ebb8e69-2a94-48fd-a0ff-772765ff6362", "numericId": 15, "displayOrder": 15,
+      "statement": "A caller with the ability to instantiate QuoteProvider, passing a very large quotes tuple, can cause excessive memory allocation during corpus construction, which leads to process-level memory exhaustion, negatively impacting application availability.",
+      "threatSource": "caller with the ability to instantiate QuoteProvider",
+      "prerequisites": "passing a very large quotes tuple",
+      "threatAction": "cause excessive memory allocation during corpus construction",
+      "threatImpact": "process-level memory exhaustion",
+      "impactedAssets": ["process memory", "application availability"],
+      "tags": ["STRIDE-DoS", "T-15", "QuoteProvider"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Denial of Service" },
+        { "key": "custom:Risk", "value": "Low 1/9" },
+        { "key": "custom:EntryPoint", "value": "EP-10: quotes parameter" }
+      ]
+    },
+    {
+      "id": "050c6692-20ea-41fd-8d54-f68e8d9d7820", "numericId": 16, "displayOrder": 16,
+      "statement": "A network attacker with the ability to open TCP connections, opening many simultaneous connections to QuoteService, can exhaust the server file descriptor limit or thread pool, which leads to service unavailability, negatively impacting all QuoteService clients.",
+      "threatSource": "network attacker with the ability to open TCP connections",
+      "prerequisites": "opening many simultaneous connections to QuoteService",
+      "threatAction": "exhaust the server file descriptor limit or thread pool",
+      "threatImpact": "service unavailability",
+      "impactedAssets": ["QuoteService TCP server", "OS file descriptors", "thread pool"],
+      "tags": ["STRIDE-DoS", "T-16", "QuoteService", "Network"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Denial of Service" },
+        { "key": "custom:Risk", "value": "High 4/9" },
+        { "key": "custom:EntryPoint", "value": "EP-8: TCP connections" }
+      ]
+    },
+    {
+      "id": "c2af25a7-8cb4-4bcb-8122-14de77344436", "numericId": 17, "displayOrder": 17,
+      "statement": "An attacker with access to server logs, triggering unhandled exceptions in QuoteService socket handlers, can read stack traces revealing internal paths and library versions, which leads to information disclosure, negatively impacting operational security.",
+      "threatSource": "attacker with access to server logs",
+      "prerequisites": "triggering unhandled exceptions in QuoteService socket handlers",
+      "threatAction": "read stack traces revealing internal paths and library versions",
+      "threatImpact": "information disclosure of internal implementation details",
+      "impactedAssets": ["server logs", "internal file paths", "Python version info"],
+      "tags": ["STRIDE-InformationDisclosure", "T-17", "QuoteService"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Information Disclosure" },
+        { "key": "custom:Risk", "value": "Low 1/9" },
+        { "key": "custom:EntryPoint", "value": "EP-8, EP-9" }
+      ]
+    },
+    {
+      "id": "91bbff65-afc7-43cc-ad9c-40230223b775", "numericId": 18, "displayOrder": 18,
+      "statement": "A misconfigured deployment with QuoteService bound to 0.0.0.0, exposing the service on all network interfaces, can allow any internet client to connect and consume quotes or launch DoS attacks, which leads to unintended public exposure, negatively impacting service availability and confidentiality.",
+      "threatSource": "misconfigured deployment with QuoteService bound to 0.0.0.0",
+      "prerequisites": "exposing the service on all network interfaces",
+      "threatAction": "allow any internet client to connect and consume quotes or launch DoS attacks",
+      "threatImpact": "unintended public exposure of the quote service",
+      "impactedAssets": ["QuoteService", "network interfaces", "server resources"],
+      "tags": ["STRIDE-ElevationOfPrivilege", "T-18", "QuoteService", "Network"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Elevation of Privilege, Information Disclosure" },
+        { "key": "custom:Risk", "value": "High 4/9" },
+        { "key": "custom:EntryPoint", "value": "EP-8, EP-9" }
+      ]
+    },
+    {
+      "id": "fa551525-5932-4d76-9afe-27575b1760c2", "numericId": 19, "displayOrder": 19,
+      "statement": "A developer running QuoteService as root to bind port 17, with a vulnerability in the service, can allow an attacker to achieve root-level code execution, which leads to full system compromise, negatively impacting the entire host system.",
+      "threatSource": "developer running QuoteService as root to bind port 17",
+      "prerequisites": "with a vulnerability in the service",
+      "threatAction": "allow an attacker to achieve root-level code execution",
+      "threatImpact": "full system compromise",
+      "impactedAssets": ["host operating system", "all running processes", "filesystem"],
+      "tags": ["STRIDE-ElevationOfPrivilege", "T-19", "QuoteService", "Privilege", "Critical"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Elevation of Privilege" },
+        { "key": "custom:Risk", "value": "Critical 6/9" },
+        { "key": "custom:EntryPoint", "value": "EP-8, EP-9: port 17" }
+      ]
+    },
+    {
+      "id": "aa97ee68-d4e9-4a88-b67d-e61c20978d91", "numericId": 20, "displayOrder": 20,
+      "statement": "A network attacker with the ability to spoof UDP source addresses, sending spoofed datagrams to QuoteService, can redirect quote responses to a victim IP, which leads to a UDP amplification/reflection attack, negatively impacting the victim network availability.",
+      "threatSource": "network attacker with the ability to spoof UDP source addresses",
+      "prerequisites": "sending spoofed datagrams to QuoteService",
+      "threatAction": "redirect quote responses to a victim IP",
+      "threatImpact": "UDP amplification/reflection attack against a victim",
+      "impactedAssets": ["victim network", "QuoteService UDP socket"],
+      "tags": ["STRIDE-DoS", "T-20", "QuoteService", "Network", "UDP"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Denial of Service" },
+        { "key": "custom:Risk", "value": "Low-Medium 2/9" },
+        { "key": "custom:EntryPoint", "value": "EP-9: UDP datagrams" }
+      ]
+    },
+    {
+      "id": "59b86efe-4db2-4c9c-b69c-99074f644de3", "numericId": 21, "displayOrder": 21,
+      "statement": "A buggy or malicious caller with the ability to invoke TelemetryStore.record(), passing an unbounded error string, can write multi-megabyte payloads to the SQLite error_msg column, which leads to disk exhaustion and potential information leakage, negatively impacting local storage and operational security.",
+      "threatSource": "buggy or malicious caller with the ability to invoke TelemetryStore.record()",
+      "prerequisites": "passing an unbounded error string",
+      "threatAction": "write multi-megabyte payloads to the SQLite error_msg column",
+      "threatImpact": "disk exhaustion and potential information leakage",
+      "impactedAssets": ["SQLite database", "local disk", "telemetry data"],
+      "tags": ["STRIDE-DoS", "STRIDE-InformationDisclosure", "T-21", "SQLite", "Telemetry"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Denial of Service, Information Disclosure" },
+        { "key": "custom:Risk", "value": "Low-Medium 2/9" },
+        { "key": "custom:Schema", "value": "duration_ns INTEGER (nanoseconds)" }
+      ]
+    },
+    {
+      "id": "f0cb25d1-c98b-4ff4-b4f8-c48c07b18b2d", "numericId": 22, "displayOrder": 22,
+      "statement": "A caller with the ability to configure TelemetryStore, supplying a crafted db_path value, can cause sqlite3.connect() to open an unexpected file or URI, which leads to unintended file access or database confusion, negatively impacting data integrity.",
+      "threatSource": "caller with the ability to configure TelemetryStore",
+      "prerequisites": "supplying a crafted db_path value",
+      "threatAction": "cause sqlite3.connect() to open an unexpected file or URI",
+      "threatImpact": "unintended file access or database confusion",
+      "impactedAssets": ["SQLite database", "local filesystem"],
+      "tags": ["STRIDE-Tampering", "T-22", "SQLite", "Path-Traversal"],
+      "metadata": [
+        { "key": "custom:STRIDE", "value": "Tampering, Information Disclosure" },
+        { "key": "custom:Risk", "value": "Low 1/9" },
+        { "key": "custom:EntryPoint", "value": "EP-11: db_path parameter" }
+      ]
+    }
+  ]
+}

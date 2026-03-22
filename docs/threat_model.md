@@ -1,6 +1,6 @@
 # Threat Model — Greeting Application
 
-**Version:** 1.3.0
+**Version:** 1.4.0
 **Date:** 2026-03-22
 **Methodology:** OWASP Threat Modeling Process + STRIDE
 **Changelog:**
@@ -8,6 +8,9 @@
 - v1.1.0 — Added QuoteProvider and QuoteService (RFC 865) threat analysis (T-14–T-20)
 - v1.2.0 — Added TelemetryStore/SQLite threat analysis (T-21–T-22); updated Python version to 3.13; updated dependency versions (sphinx 8.2.3, sphinx-rtd-theme 3.0.2); added security test coverage notes
 - v1.3.0 — Updated T-21/T-22 to reflect nanosecond schema (`duration_ns INTEGER`); added Cloudflare Worker and `scripts/dev.sh` to asset inventory; updated CI audit step
+- v1.4.0 — Added `threat_model.tc.json` (AWS Threat Composer importable format); added Cloudflare D1 and Worker HTTP API to asset inventory and entry points; added secrets management threats (T-11 updated); added Worker input sanitisation mitigation (m-18); updated all STRIDE tags and risk scores
+
+**Machine-readable format:** [`threat_model.tc.json`](threat_model.tc.json) — importable into [AWS Threat Composer](https://awslabs.github.io/threat-composer/)
 **References:**
 - [OWASP Threat Modeling Process](https://owasp.org/www-community/Threat_Modeling_Process)
 - [OWASP Top 10 CI/CD Security Risks](https://owasp.org/www-project-top-10-ci-cd-security-risks/)

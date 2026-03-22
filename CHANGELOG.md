@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.4.0] — 2026-03-22
+
+### Added
+- `docs/threat_model.tc.json` — AWS Threat Composer importable JSON file covering all 22 threats,
+  18 mitigations, 6 assumptions, and full mitigation links. Import at
+  [awslabs.github.io/threat-composer](https://awslabs.github.io/threat-composer/).
+- Threat model updated to v1.4.0: Cloudflare D1 and Worker HTTP API added to asset inventory
+  and entry points; Worker input sanitisation mitigation (m-18) added; all threats use
+  Threat Composer grammar (threatSource / prerequisites / threatAction / threatImpact / impactedAssets).
+
 ## [1.3.0] — 2026-03-22
 
 ### Added
