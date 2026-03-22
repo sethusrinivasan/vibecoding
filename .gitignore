@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Sphinx build output
+docs/_build/
+
+# Test / coverage artefacts
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local SQLite databases
+*.db
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Cloudflare / Wrangler
+worker/.wrangler/
+.wrangler/
+.dev.vars
+*.dev.vars
+worker/wrangler.local.toml
+wrangler.local.toml

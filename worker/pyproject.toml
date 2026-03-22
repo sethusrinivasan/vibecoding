@@ -1,0 +1,14 @@
+[project]
+name        = "greeting-worker"
+version     = "1.2.0"
+description = "Greeting service — Cloudflare Worker (Python)"
+requires-python = ">=3.12"
+# colorama is a terminal library — not needed in a Worker (HTTP responses carry plain text)
+# All other runtime deps are pure-Python and bundled automatically by pywrangler.
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "workers-py",
+    "workers-runtime-sdk",
+]

@@ -1,0 +1,16 @@
+name            = "greeting-worker"
+main            = "src/entry.py"
+compatibility_date = "2026-03-22"
+compatibility_flags = ["python_workers"]
+
+# ---------------------------------------------------------------------------
+# D1 database binding — replaces local SQLite TelemetryStore at the edge
+# ---------------------------------------------------------------------------
+# Create the database once:
+#   wrangler d1 create greeting-telemetry
+# Then paste the returned database_id below and run the migration:
+#   wrangler d1 execute greeting-telemetry --file=worker/schema.sql
+[[d1_databases]]
+binding      = "DB"           # accessed as env.DB inside the worker
+database_name = "greeting-telemetry"
+database_id  = "YOUR-D1-DATABASE-ID-HERE"   # set after: wrangler d1 create greeting-telemetry
