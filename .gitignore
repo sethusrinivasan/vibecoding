@@ -46,3 +46,7 @@ worker/.wrangler/
 *.dev.vars
 worker/wrangler.local.toml
 wrangler.local.toml
+
+# Wrangler build artifacts
+worker/python_modules/
+worker/.venv-workers/
